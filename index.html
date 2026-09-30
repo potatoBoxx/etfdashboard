@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>K-ETF Market Radar | 네이버 증권 실시간 ETF 종합 EDA 대시보드</title>
+  <meta name="description" content="네이버 증권 ETF 실시간 API를 활용한 국내 전체 ETF 종목 심층 탐색적 데이터 분석(EDA) 대시보드. 운용사 점유율, 자산군 배분, 수익률 분포, 괴리율 리스크를 한눈에 파악하세요.">
+  
+  <!-- Modern Korean & Monospace Typography -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="dashboard-container">
+    
+    <!-- Top Header & Navigation -->
+    <header class="dashboard-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-badge">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="20" x2="12" y2="10"></line>
+            <line x1="18" y1="20" x2="18" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="16"></line>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <h1>
+            K-ETF Market Radar
+            <span class="highlight-tag">LIVE EDA</span>
+          </h1>
+          <p>네이버 증권 실시간 API 기반 국내 상장 ETF 전체 종목 탐색적 데이터 분석 대시보드</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="live-status-pill">
+          <span class="live-beacon"></span>
+          <span id="dataSourceBadge">실시간 API 연동</span>
+        </div>
+        <span id="lastUpdateTime" style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">기준: 2026-09-30</span>
+        
+        <button id="btnLiveRefresh" class="btn btn-primary" title="네이버 증권에서 최신 실시간 데이터를 다시 받아옵니다">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          실시간 새로고침
+        </button>
+
+        <button id="btnExportCsv" class="btn" title="분석 데이터를 CSV 파일로 내보냅니다">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          CSV
+        </button>
+
+        <button id="btnExportJson" class="btn" title="JSON 포맷으로 데이터 다운로드">
+          JSON
+        </button>
+
+        <button id="btnCopyReport" class="btn" title="시장 요약 리포트를 클립보드에 복사합니다">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          리포트 복사
+        </button>
+      </div>
+    </header>
+
+    <!-- Live Fetch Progress Bar -->
+    <div id="fetchProgressContainer" class="fetch-progress-container">
+      <div class="fetch-progress-header">
+        <span id="fetchProgressText">네이버 증권 API 실시간 수집 중... (0%)</span>
+        <span>실시간 스트리밍</span>
+      </div>
+      <div class="progress-track">
+        <div id="fetchProgressBar" class="progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- Top KPI Overview Strip -->
+    <section class="kpi-grid">
+      <!-- 1. Total Market AUM -->
+      <div class="kpi-card highlight-cyan">
+        <div class="kpi-header">
+          <span class="kpi-title">총 순자산총액 (AUM)</span>
+          <div class="kpi-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+            </svg>
+          </div>
+        </div>
+        <div id="kpiTotalAum" class="kpi-value">133.9조 원</div>
+        <div class="kpi-meta">
+          <span id="kpiAumConcentration">상위 10개 집중도 (CR10): 53.3%</span>
+        </div>
+      </div>
+
+      <!-- 2. Market Breadth -->
+      <div class="kpi-card highlight-green">
+        <div class="kpi-header">
+          <span class="kpi-title">당일 등락 현황 (Market Breadth)</span>
+          <div class="kpi-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+              <polyline points="16 7 22 7 22 13"></polyline>
+            </svg>
+          </div>
+        </div>
+        <div id="kpiBreadthValue" class="kpi-value">상승 612 / 하락 389</div>
+        <div class="kpi-meta">
+          <span id="kpiBreadthMeta">보합 70개 (57.1% 상승)</span>
+        </div>
+        <div class="breadth-bar">
+          <div id="breadthUpBar" class="breadth-up" style="width: 57%;"></div>
+          <div id="breadthSteadyBar" class="breadth-steady" style="width: 7%;"></div>
+          <div id="breadthDownBar" class="breadth-down" style="width: 36%;"></div>
+        </div>
+      </div>
+
+      <!-- 3. Total Trading Value -->
+      <div class="kpi-card highlight-amber">
+        <div class="kpi-header">
+          <span class="kpi-title">오늘 총 거래대금</span>
+          <div class="kpi-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+        </div>
+        <div id="kpiTradingValue" class="kpi-value">4.2조 원</div>
+        <div class="kpi-meta">
+          <span id="kpiTradingTop">최대 거래: KODEX 반도체</span>
+        </div>
+      </div>
+
+      <!-- 4. Return Spectrum -->
+      <div class="kpi-card highlight-indigo">
+        <div class="kpi-header">
+          <span class="kpi-title">1개월 평균 수익률</span>
+          <div class="kpi-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+          </div>
+        </div>
+        <div id="kpiReturnAvg" class="kpi-value val-up">+2.12%</div>
+        <div class="kpi-meta">
+          <span id="kpiReturnMeta">중앙값 +1.8% | 승률 58.4%</span>
+        </div>
+      </div>
+
+      <!-- 5. Disparity Alert -->
+      <div class="kpi-card highlight-purple">
+        <div class="kpi-header">
+          <span class="kpi-title">평균 절대 괴리율 (iNAV)</span>
+          <div class="kpi-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </div>
+        </div>
+        <div id="kpiDisparityAvg" class="kpi-value">±0.28%</div>
+        <div class="kpi-meta">
+          <span id="kpiDisparityAlert">1% 초과 주의 종목: 24개 (2.2%)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- EDA Visual Analytics Center -->
+    <section class="eda-section">
+      <div class="eda-nav-bar">
+        <div class="eda-tabs">
+          <button class="tab-btn active" data-tab="brand">📊 운용사 점유율</button>
+          <button class="tab-btn" data-tab="asset">🌐 자산군/유형별 분석</button>
+          <button class="tab-btn" data-tab="returns">📈 수익률 분포 분석</button>
+          <button class="tab-btn" data-tab="scatter">⚡ 모멘텀 사분면 (1M vs 6M)</button>
+          <button class="tab-btn" data-tab="disparity">🎯 괴리율 리스크 탐지</button>
+          <button class="tab-btn" data-tab="theme">🏷️ 주요 테마 성과</button>
+        </div>
+
+        <div id="returnsPeriodGroup" class="eda-period-select" style="display: none;">
+          <span style="font-size: 0.75rem; color: var(--text-muted);">기간:</span>
+          <button class="period-btn active" data-period="1m">1개월</button>
+          <button class="period-btn" data-period="3m">3개월</button>
+          <button class="period-btn" data-period="6m">6개월</button>
+        </div>
+      </div>
+
+      <div class="chart-container-box">
+        <div class="chart-main">
+          <canvas id="mainChartCanvas"></canvas>
+        </div>
+
+        <div class="chart-insights-card">
+          <h2 id="chartInsightsTitle" class="insights-title">운용사 생태계 EDA 인사이트</h2>
+          <ul id="chartInsightsList" class="insights-list">
+            <li>데이터를 불러오는 중입니다...</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Deep Dive ETF Explorer Table Section -->
+    <section class="explorer-section">
+      <div class="explorer-header">
+        <div class="explorer-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"></line>
+            <line x1="8" y1="12" x2="21" y2="12"></line>
+            <line x1="8" y1="18" x2="21" y2="18"></line>
+            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+          </svg>
+          ETF 종목 정밀 탐색기
+          <span id="tableCountBadge" class="table-count-badge">1,071개 종목</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <label for="pageSizeSelect" style="font-size: 0.8rem; color: var(--text-secondary);">표시 개수:</label>
+          <select id="pageSizeSelect" style="background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-subtle); padding: 0.35rem 0.65rem; border-radius: var(--radius-sm); font-size: 0.8rem; outline: none;">
+            <option value="20" selected>20개씩</option>
+            <option value="50">50개씩</option>
+            <option value="100">100개씩</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <div class="search-and-presets">
+          <div class="search-box">
+            <span class="search-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </span>
+            <input id="searchInput" type="text" class="search-input" placeholder="종목명 또는 코드 검색 (예: KODEX, 091160, 반도체, 미국배당, CD금리)...">
+          </div>
+
+          <div class="filter-pills-row" id="presetPills">
+            <span class="filter-label">인기 프리셋:</span>
+            <div class="pill-group">
+              <button class="filter-pill active" data-filter="preset" data-val="ALL">전체</button>
+              <button class="filter-pill" data-filter="preset" data-val="gainers">🔥 오늘 상승</button>
+              <button class="filter-pill" data-filter="preset" data-val="r1m_plus">📈 1M 플러스</button>
+              <button class="filter-pill" data-filter="preset" data-val="r6m_surge">🚀 6M +30% 이상</button>
+              <button class="filter-pill" data-filter="preset" data-val="high_disparity">⚠️ 괴리율 1% 초과 주의</button>
+              <button class="filter-pill" data-filter="preset" data-val="mega_aum">💎 1조 이상 대형 ETF</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-pills-row">
+          <span class="filter-label">운용사:</span>
+          <div class="pill-group" id="brandPills"></div>
+        </div>
+
+        <div class="filter-pills-row">
+          <span class="filter-label">자산군:</span>
+          <div class="pill-group" id="catPills"></div>
+        </div>
+
+        <div class="filter-pills-row">
+          <span class="filter-label">핵심 테마:</span>
+          <div class="pill-group" id="tagPills"></div>
+        </div>
+      </div>
+
+      <!-- Data Table -->
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;">#</th>
+              <th data-sort="itemCode">코드</th>
+              <th data-sort="itemName">종목명</th>
+              <th data-sort="brand">운용사</th>
+              <th data-sort="category">자산유형</th>
+              <th data-sort="currentPrice" style="text-align: right;">현재가</th>
+              <th data-sort="changeRate" style="text-align: right;">등락률</th>
+              <th data-sort="iNav" style="text-align: right;">iNAV</th>
+              <th data-sort="disparity" style="text-align: right;">괴리율</th>
+              <th data-sort="returnRate1m" style="text-align: right;">1개월</th>
+              <th data-sort="returnRate3m" style="text-align: right;">3개월</th>
+              <th data-sort="returnRate6m" style="text-align: right;">6개월</th>
+              <th data-sort="totalNetAssets" class="sorted-desc" style="text-align: right;">순자산(AUM)</th>
+              <th data-sort="tradingValue" style="text-align: right;">거래대금</th>
+            </tr>
+          </thead>
+          <tbody id="etfTableBody">
+            <!-- Table rows populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Table Footer with Pagination -->
+      <div class="table-footer">
+        <div id="pageInfoText" style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">
+          페이지 1 / 54 (총 1,071개)
+        </div>
+        <div class="pagination-controls" id="paginationControls"></div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ETF Detailed Modal Popup -->
+  <div id="etfDetailModal" class="modal-overlay">
+    <div class="modal-content">
+      <button id="modalCloseBtn" class="modal-close-btn">&times;</button>
+      
+      <div class="modal-header">
+        <div id="modalTicker" class="modal-ticker">091160 | KODEX (삼성자산운용)</div>
+        <h3 id="modalTitle" class="modal-title">KODEX 반도체</h3>
+      </div>
+
+      <div class="modal-grid">
+        <div class="modal-data-box">
+          <div class="modal-data-label">현재가 (등락률)</div>
+          <div id="modalPrice" class="modal-data-val">143,330 원 (+1.54%)</div>
+        </div>
+
+        <div class="modal-data-box" id="modalDisparityBox">
+          <div class="modal-data-label">iNAV (실시간 괴리율)</div>
+          <div id="modalInav" class="modal-data-val">143,498 원 (<span id="modalDisparity">-0.12%</span>)</div>
+        </div>
+
+        <div class="modal-data-box">
+          <div class="modal-data-label">순자산총액 (AUM)</div>
+          <div id="modalAum" class="modal-data-val">6.01조 원</div>
+        </div>
+
+        <div class="modal-data-box">
+          <div class="modal-data-label">오늘 거래대금 (거래량)</div>
+          <div id="modalTradingValue" class="modal-data-val">884억 원 (617,178 주)</div>
+        </div>
+      </div>
+
+      <div class="returns-bar-section">
+        <div class="returns-bar-title">기간별 수익률 성과 현황</div>
+        <div class="returns-bar-row">
+          <span>최근 1개월 수익률:</span>
+          <strong id="modalR1m" class="val-up">+13.61%</strong>
+        </div>
+        <div class="returns-bar-row">
+          <span>최근 3개월 수익률:</span>
+          <strong id="modalR3m" class="val-down">-16.53%</strong>
+        </div>
+        <div class="returns-bar-row">
+          <span>최근 6개월 수익률:</span>
+          <strong id="modalR6m" class="val-up">+48.03%</strong>
+        </div>
+      </div>
+
+      <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+        분류: <span id="modalCategory" style="color: var(--text-main);">국내주식형 (섹터)</span>
+      </div>
+
+      <div class="modal-footer">
+        <a id="modalNaverLink" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+          네이버 증권 종목 상세 페이지 열기 ↗
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Application Scripts -->
+  <!-- 1. Initial Data Snapshot for instant zero-lag offline/file:// preview -->
+  <script src="js/default_data.js"></script>
+  <!-- 2. API Fetch & Fallback Engine -->
+  <script src="js/api.js"></script>
+  <!-- 3. Quantitative EDA Engine -->
+  <script src="js/eda.js"></script>
+  <!-- 4. Interactive Charts Engine -->
+  <script src="js/charts.js"></script>
+  <!-- 5. Main Application Controller -->
+  <script src="js/app.js"></script>
+
+</body>
+</html>

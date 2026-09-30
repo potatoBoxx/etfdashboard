@@ -1,0 +1,119 @@
+# ==============================================================================
+# Git Ignore Configuration for K-ETF Market Radar Project
+# ==============================================================================
+
+# --- Python & Virtual Environments (uv / pip) ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# uv / virtualenv
+.venv/
+venv/
+ENV/
+env/
+.env/
+.uv/
+
+# Testing & Linting Tools
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# --- Environment Variables & Secrets ---
+.env
+.env.local
+.env.*.local
+*.secret
+*.pem
+*.key
+
+# --- Operating System Files ---
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# --- IDE & Editor Settings ---
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains (PyCharm, WebStorm, etc.)
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Sublime Text / Atom / Vim
+*.sublime-workspace
+*.sublime-project
+*.swp
+*.swo
+*~
+
+# --- Logs & Temporary Files ---
+*.log
+logs/
+temp/
+tmp/
+scratch/
+*.tmp
+*.bak
+*.sw?
+
+# --- Note on Static Deployment Data ---
+# data/etfs.json 및 js/default_data.js는 GitHub Pages 등 정적 호스팅 서비스에서
+# 초기 렌더링에 필요한 필수 정적 데이터셋이므로 버전 관리에 포함됩니다.
+# 만약 실시간 수집 데이터셋을 원격 저장소에 올리지 않으려면 아래 주석을 해제하세요:
+# /data/etfs.json
+# /js/default_data.js
