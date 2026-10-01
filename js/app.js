@@ -348,7 +348,7 @@ const App = {
   },
 
   /**
-   * Live Streaming Fetch from Naver
+   * Live Streaming Fetch from Naver with Smart Snapshot Fallback
    */
   async handleLiveRefresh() {
     const refreshBtn = document.getElementById('btnLiveRefresh');
@@ -358,8 +358,23 @@ const App = {
 
     if (refreshBtn) refreshBtn.disabled = true;
     if (progressContainer) progressContainer.style.display = 'block';
+    if (progressBar) progressBar.style.width = '15%';
+    if (progressText) progressText.textContent = '최신 데이터 저장소 확인 중...';
 
+    // 1단계: 원격 저장소의 최신 스냅샷 확인 (캐시 무효화)
+    let snapshotData = null;
     try {
+      snapshotData = await ETF_API.fetchLatestSnapshot();
+    } catch (e) {
+      console.warn('Snapshot fetch error:', e);
+    }
+
+    // 2단계: 네이버 증권 API 실시간 수집 시도
+    let liveSuccess = false;
+    try {
+      if (progressBar) progressBar.style.width = '30%';
+      if (progressText) progressText.textContent = '네이버 증권 API 실시간 수집 시도 중...';
+
       const freshData = await ETF_API.fetchAllLive((prog) => {
         if (progressBar) progressBar.style.width = `${prog.percent}%`;
         if (progressText) {
@@ -367,15 +382,26 @@ const App = {
         }
       });
 
-      if (progressContainer) progressContainer.style.display = 'none';
-      if (refreshBtn) refreshBtn.disabled = false;
-
-      this.handleDataLoaded(freshData);
+      if (freshData && freshData.items && freshData.items.length > 0) {
+        liveSuccess = true;
+        this.handleDataLoaded(freshData);
+        this.showToast(`네이버 증권 실시간 데이터(${freshData.items.length}개 종목) 수집 완료!`);
+      }
     } catch (err) {
-      console.error('Error during live fetch:', err);
-      if (progressContainer) progressContainer.style.display = 'none';
-      if (refreshBtn) refreshBtn.disabled = false;
-      this.showToast('실시간 수집 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+      console.warn('Live API fetch blocked by browser CORS:', err);
+    }
+
+    if (progressContainer) progressContainer.style.display = 'none';
+    if (refreshBtn) refreshBtn.disabled = false;
+
+    // 3단계: 실시간 API가 브라우저 보안(CORS)으로 차단된 경우 최신 저장소 데이터로 동기화
+    if (!liveSuccess) {
+      if (snapshotData && snapshotData.items && snapshotData.items.length > 0) {
+        this.handleDataLoaded(snapshotData);
+        this.showToast(`최신 배포 데이터셋으로 동기화 완료 (기준: ${snapshotData.updatedAt})`);
+      } else {
+        this.showToast('브라우저 CORS 제한으로 실시간 API가 차단되었습니다. 저장소 최신 데이터를 로드합니다.');
+      }
     }
   },
 

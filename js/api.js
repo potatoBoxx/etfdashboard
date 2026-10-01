@@ -1,11 +1,14 @@
 /**
  * Naver Securities ETF API Client
- * Supports Direct Fetch, CORS Proxy Fallback, and Local Snapshot loading
+ * Supports Direct Fetch, CORS Proxy Fallback, and Local/Remote Snapshot loading
  */
 
 const ETF_API = {
   BASE_URL: 'https://stock.naver.com/api/stockSecurity/etfs/v2/domestic?listingType=aumDesc&size=100&index=',
-  CORS_PROXY: 'https://api.allorigins.win/raw?url=',
+  CORS_PROXIES: [
+    'https://api.allorigins.win/raw?url=',
+    'https://api.codetabs.com/v1/proxy?quest='
+  ],
 
   /**
    * Load initial data:
@@ -27,7 +30,6 @@ const ETF_API = {
       const resp = await fetch('data/etfs.json');
       if (resp.ok) {
         const json = await resp.json();
-        console.log('Loaded from data/etfs.json:', json.items.length, 'items');
         return {
           source: 'local_file',
           updatedAt: json.updatedAt || new Date().toLocaleString('ko-KR'),
@@ -39,23 +41,55 @@ const ETF_API = {
       console.warn('Could not load data/etfs.json via fetch:', err);
     }
 
-    throw new Error('초기 데이터를 불러올 수 없습니다. 실시간 데이터 동기화를 시도해주세요.');
+    throw new Error('초기 데이터를 불러올 수 없습니다.');
   },
 
   /**
-   * Fetch single page with direct or proxy fallback
+   * Fetch latest snapshot directly from GitHub / repository with cache buster
    */
-  async fetchPage(page, useProxy = false) {
+  async fetchLatestSnapshot() {
+    const urls = [
+      `data/etfs.json?nocache=${Date.now()}`,
+      `https://raw.githubusercontent.com/potatoBoxx/etfdashboard/main/data/etfs.json?nocache=${Date.now()}`
+    ];
+
+    for (const u of urls) {
+      try {
+        const resp = await fetch(u, { cache: 'no-store' });
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json && json.items && json.items.length > 0) {
+            return {
+              source: 'remote_snapshot',
+              updatedAt: json.updatedAt || new Date().toLocaleString('ko-KR'),
+              totalCount: json.totalCount || json.items.length,
+              items: json.items
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('Snapshot fetch failed for:', u, e);
+      }
+    }
+    return null;
+  },
+
+  /**
+   * Fetch single page with short timeout
+   */
+  async fetchPage(page, proxyIndex = -1) {
     const targetUrl = `${this.BASE_URL}${page}`;
-    const fetchUrl = useProxy ? `${this.CORS_PROXY}${encodeURIComponent(targetUrl)}` : targetUrl;
+    const fetchUrl = proxyIndex >= 0 && proxyIndex < this.CORS_PROXIES.length
+      ? `${this.CORS_PROXIES[proxyIndex]}${encodeURIComponent(targetUrl)}`
+      : targetUrl;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 4000); // 4초 타임아웃
 
     try {
       const resp = await fetch(fetchUrl, {
         signal: controller.signal,
-        headers: useProxy ? {} : { 'Accept': 'application/json' }
+        headers: proxyIndex >= 0 ? {} : { 'Accept': 'application/json' }
       });
       clearTimeout(timeoutId);
 
@@ -67,10 +101,9 @@ const ETF_API = {
       return data;
     } catch (err) {
       clearTimeout(timeoutId);
-      // If direct fetch failed (e.g. CORS), fallback to proxy once
-      if (!useProxy) {
-        console.warn(`Direct fetch failed for page ${page}, switching to CORS Proxy...`, err);
-        return await this.fetchPage(page, true);
+      // Try next proxy
+      if (proxyIndex < this.CORS_PROXIES.length - 1) {
+        return await this.fetchPage(page, proxyIndex + 1);
       }
       throw err;
     }
@@ -78,24 +111,15 @@ const ETF_API = {
 
   /**
    * Fetch all ETFs live from Naver Securities API
-   * Calls onProgress({ page, totalPages, count, totalCount })
    */
   async fetchAllLive(onProgress) {
     let allItems = [];
     let page = 1;
-    let totalCount = 1171; // approximate
+    let totalCount = 1171;
     let hasNext = true;
-    let usedProxy = false;
 
-    // Test page 1 first to determine proxy necessity
-    let firstPageData;
-    try {
-      firstPageData = await this.fetchPage(1, false);
-    } catch (e) {
-      console.log('Direct fetch not permitted by browser CORS, using CORS Proxy...');
-      usedProxy = true;
-      firstPageData = await this.fetchPage(1, true);
-    }
+    // Test page 1
+    const firstPageData = await this.fetchPage(1, -1);
 
     if (firstPageData && firstPageData.items) {
       totalCount = parseInt(firstPageData.totalCount || 1171, 10);
@@ -117,7 +141,7 @@ const ETF_API = {
 
       while (hasNext && page <= 25) {
         try {
-          const pageData = await this.fetchPage(page, usedProxy);
+          const pageData = await this.fetchPage(page, -1);
           if (!pageData.items || pageData.items.length === 0) break;
 
           allItems.push(...pageData.items);
@@ -137,8 +161,7 @@ const ETF_API = {
           }
 
           page++;
-          // gentle delay to avoid burst throttling
-          await new Promise(r => setTimeout(r, 60));
+          await new Promise(r => setTimeout(r, 50));
         } catch (err) {
           console.error(`Error on page ${page}:`, err);
           break;
@@ -152,7 +175,7 @@ const ETF_API = {
     });
 
     return {
-      source: usedProxy ? 'live_proxy' : 'live_direct',
+      source: 'live_api',
       updatedAt: nowStr,
       totalCount: allItems.length,
       items: allItems
